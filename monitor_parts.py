@@ -92,10 +92,6 @@ def send_space_alert(webhook_url, changes, current_data):
         if len(current_data) > 0 and len(current_data[0]) > 2:
             values = current_data[0][2:]  # Skip DATE and TOTAL WEIGHTS in row 1
         
-        # Print debug info
-        print(f"Debug - Headers: {part_headers}")
-        print(f"Debug - Values: {values}")
-        
         # Map values to headers
         for i in range(min(len(part_headers), len(values))):
             try:
@@ -185,14 +181,6 @@ def detect_changes(previous_data, current_data):
         curr_values = []
         if len(current_data) > 0 and len(current_data[0]) > 2:
             curr_values = current_data[0][2:]  # Skip DATE and TOTAL WEIGHTS
-        
-        # Print information for debugging
-        print(f"Debug - Previous data row length: {len(previous_data[0]) if len(previous_data) > 0 else 0}")
-        print(f"Debug - Current data row length: {len(current_data[0]) if len(current_data) > 0 else 0}")
-        print(f"Debug - Parts headers row length: {len(current_data[1]) if len(current_data) > 1 else 0}")
-        print(f"Debug - Part headers: {part_headers}")
-        print(f"Debug - Previous values: {prev_values}")
-        print(f"Debug - Current values: {curr_values}")
         
         # Validate data structure
         if len(part_headers) != len(curr_values):
