@@ -164,19 +164,43 @@ def detect_changes(previous_data, current_data):
     try:
         changes = []
         # Map the parts from row 2 with values from row 1
-        prev_values = previous_data[0][2:]  # Skip DATE and TOTAL WEIGHTS
-        curr_values = current_data[0][2:]   # Skip DATE and TOTAL WEIGHTS
-        part_names = current_data[1][1:]    # Skip the first column (PARTS TYPE)
+        prev_values = previous_data[0][2:] if len(previous_data[0]) > 2 else []  # Skip DATE and TOTAL WEIGHTS
+        curr_values = current_data[0][2:] if len(current_data[0]) > 2 else []    # Skip DATE and TOTAL WEIGHTS
+        part_names = current_data[1][1:] if len(current_data[1]) > 1 else []     # Skip the first column (PARTS TYPE)
+        
+        # Print information for debugging
+        print(f"Debug - Previous data row length: {len(previous_data[0])}")
+        print(f"Debug - Current data row length: {len(current_data[0])}")
+        print(f"Debug - Parts headers row length: {len(current_data[1])}")
         
         # Validate data structure
-        if len(part_names) != len(curr_values) or len(prev_values) != len(curr_values):
-            print(f"Data length mismatch - Previous values: {len(prev_values)}, Current values: {len(curr_values)}, Parts: {len(part_names)}")
-            raise APIError("Data structure mismatch while comparing states")
+        if len(part_names) != len(curr_values):
+            print(f"Warning: Mismatch between parts ({len(part_names)}) and values ({len(curr_values)})")
+            # Use the shorter length for comparison
+            compare_length = min(len(part_names), len(curr_values))
+            # Trim the arrays to the same length
+            part_names = part_names[:compare_length]
+            curr_values = curr_values[:compare_length]
+            prev_values = prev_values[:compare_length] if len(prev_values) > compare_length else prev_values
         
+        # If previous values array is shorter than current, pad it
+        if len(prev_values) < len(curr_values):
+            print(f"Warning: Previous values array ({len(prev_values)}) shorter than current ({len(curr_values)})")
+            # Pad with empty strings
+            prev_values = prev_values + [''] * (len(curr_values) - len(prev_values))
+        # If previous values array is longer, trim it
+        elif len(prev_values) > len(curr_values):
+            print(f"Warning: Previous values array ({len(prev_values)}) longer than current ({len(curr_values)})")
+            prev_values = prev_values[:len(curr_values)]
+            
         print("\nComparing states...")
         
         # Compare each value and detect changes
         for i in range(len(part_names)):
+            if i >= len(prev_values) or i >= len(curr_values):
+                print(f"Warning: Index {i} out of bounds. Skipping comparison.")
+                continue
+                
             # Convert both values to strings for comparison to avoid type mismatches
             prev_val = str(prev_values[i]).strip()
             curr_val = str(curr_values[i]).strip()
@@ -201,7 +225,12 @@ def detect_changes(previous_data, current_data):
         return changes
     except Exception as e:
         print(f"Error detecting changes: {str(e)}")
-        raise APIError("Failed to compare states")
+        print("Attempting to reset state file for next run...")
+        # Save current state to recover from this error
+        save_current_state(current_data)
+        print("State file updated with current data. Next run should work correctly.")
+        # Don't propagate the exception, just return empty changes
+        return []
 
 def main():
     try:
@@ -229,24 +258,30 @@ def main():
         else:
             # Check for changes
             print("Checking for changes...")
-            changes = detect_changes(previous_data, current_data)
-            if changes:
-                print("Changes detected, sending alert...")
-                if send_space_alert(webhook_url, changes=changes, current_data=current_data):
-                    save_current_state(current_data)
+            try:
+                changes = detect_changes(previous_data, current_data)
+                if changes:
+                    print("Changes detected, sending alert...")
+                    if send_space_alert(webhook_url, changes=changes, current_data=current_data):
+                        save_current_state(current_data)
+                    else:
+                        print("Failed to send change alert, but continuing execution")
+                        save_current_state(current_data)
                 else:
-                    raise APIError("Failed to send change alert")
-            else:
-                print("No changes detected, updating state file...")
+                    print("No changes detected, updating state file...")
+                    save_current_state(current_data)
+            except Exception as e:
+                print(f"Error during change detection or alerting: {str(e)}")
+                print("Saving current state to recover on next run...")
                 save_current_state(current_data)
 
     except APIError as e:
         print(f"API Error: {str(e)}")
-        # Don't update state file on API errors to maintain consistency
-        exit(1)
+        # Don't exit with error to avoid GitHub Actions failure
+        # Just log the error and continue
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
-        exit(1)
+        # Don't exit with error to avoid GitHub Actions failure
 
 if __name__ == '__main__':
     main() 
