@@ -90,7 +90,7 @@ def send_space_alert(webhook_url, changes, current_data):
         # Get values from row 1 (starting from column C which is index 2)
         values = []
         if len(current_data) > 0 and len(current_data[0]) > 2:
-            values = current_data[0][2:]  # Skip DATE and TOTAL WEIGHTS
+            values = current_data[0][2:]  # Skip DATE and TOTAL WEIGHTS in row 1
         
         # Print debug info
         print(f"Debug - Headers: {part_headers}")
@@ -109,15 +109,6 @@ def send_space_alert(webhook_url, changes, current_data):
             except (ValueError, TypeError, IndexError) as e:
                 print(f"Error formatting part {i}: {str(e)}")
                 message += f"• {part_headers[i] if i < len(part_headers) else 'Unknown'}: {values[i] if i < len(values) else 'N/A'}\n"
-        
-        # Add total weight if available
-        if len(current_data[0]) > 1:
-            total_weight = current_data[0][1]  # TOTAL WEIGHTS from row 1
-            if str(total_weight).strip().replace('.', '', 1).isdigit():
-                formatted_total = f"{float(total_weight):,.2f} kg"
-            else:
-                formatted_total = str(total_weight)
-            message += f"\n*TOTAL WEIGHTS: {formatted_total}*\n"
         
         # Get current time in WAT
         wat_tz = pytz.timezone('Africa/Lagos')
