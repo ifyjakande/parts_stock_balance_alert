@@ -77,11 +77,27 @@ def send_space_alert(webhook_url, changes, current_data):
                 message += f"• {part}: {old_val} → {new_val}\n"
         
         message += "\n*Current Parts Weights:*\n"
-        # Map headers from row 2 with values from row 1
-        headers = current_data[1][1:]  # Skip the first column in row 2 (PARTS TYPE)
-        values = current_data[0][2:]   # Skip DATE and TOTAL WEIGHTS in row 1
         
-        for i in range(len(headers)):
+        # Based on the screenshot, the correct mapping is:
+        # Row 1: [DATE, TOTAL WEIGHTS, value, value, value, value, value, value]
+        # Row 2: [empty, PARTS TYPE, WINGS, LAPS, BREAST FILLET, BONES, TOTAL]
+        
+        # Get part headers from row 2 (starting from column C which is index 2)
+        part_headers = []
+        if len(current_data) > 1 and len(current_data[1]) > 2:
+            part_headers = current_data[1][2:]  # Skip empty cell and PARTS TYPE
+        
+        # Get values from row 1 (starting from column C which is index 2)
+        values = []
+        if len(current_data) > 0 and len(current_data[0]) > 2:
+            values = current_data[0][2:]  # Skip DATE and TOTAL WEIGHTS
+        
+        # Print debug info
+        print(f"Debug - Headers: {part_headers}")
+        print(f"Debug - Values: {values}")
+        
+        # Map values to headers
+        for i in range(min(len(part_headers), len(values))):
             try:
                 # Format weight values
                 val = values[i]
@@ -89,9 +105,10 @@ def send_space_alert(webhook_url, changes, current_data):
                     formatted_val = f"{float(val):,.2f} kg"
                 else:
                     formatted_val = str(val)
-                message += f"• {headers[i]}: {formatted_val}\n"
-            except (ValueError, TypeError, IndexError):
-                message += f"• {headers[i]}: {values[i] if i < len(values) else 'N/A'}\n"
+                message += f"• {part_headers[i]}: {formatted_val}\n"
+            except (ValueError, TypeError, IndexError) as e:
+                print(f"Error formatting part {i}: {str(e)}")
+                message += f"• {part_headers[i] if i < len(part_headers) else 'Unknown'}: {values[i] if i < len(values) else 'N/A'}\n"
         
         # Add total weight if available
         if len(current_data[0]) > 1:
@@ -163,23 +180,36 @@ def detect_changes(previous_data, current_data):
     
     try:
         changes = []
-        # Map the parts from row 2 with values from row 1
-        prev_values = previous_data[0][2:] if len(previous_data[0]) > 2 else []  # Skip DATE and TOTAL WEIGHTS
-        curr_values = current_data[0][2:] if len(current_data[0]) > 2 else []    # Skip DATE and TOTAL WEIGHTS
-        part_names = current_data[1][1:] if len(current_data[1]) > 1 else []     # Skip the first column (PARTS TYPE)
+        # Get part headers from row 2 (starting from column C which is index 2)
+        part_headers = []
+        if len(current_data) > 1 and len(current_data[1]) > 2:
+            part_headers = current_data[1][2:]  # Skip empty cell and PARTS TYPE
+        
+        # Get previous values from row 1 (starting from column C which is index 2)
+        prev_values = []
+        if len(previous_data) > 0 and len(previous_data[0]) > 2:
+            prev_values = previous_data[0][2:]  # Skip DATE and TOTAL WEIGHTS
+        
+        # Get current values from row 1 (starting from column C which is index 2)
+        curr_values = []
+        if len(current_data) > 0 and len(current_data[0]) > 2:
+            curr_values = current_data[0][2:]  # Skip DATE and TOTAL WEIGHTS
         
         # Print information for debugging
-        print(f"Debug - Previous data row length: {len(previous_data[0])}")
-        print(f"Debug - Current data row length: {len(current_data[0])}")
-        print(f"Debug - Parts headers row length: {len(current_data[1])}")
+        print(f"Debug - Previous data row length: {len(previous_data[0]) if len(previous_data) > 0 else 0}")
+        print(f"Debug - Current data row length: {len(current_data[0]) if len(current_data) > 0 else 0}")
+        print(f"Debug - Parts headers row length: {len(current_data[1]) if len(current_data) > 1 else 0}")
+        print(f"Debug - Part headers: {part_headers}")
+        print(f"Debug - Previous values: {prev_values}")
+        print(f"Debug - Current values: {curr_values}")
         
         # Validate data structure
-        if len(part_names) != len(curr_values):
-            print(f"Warning: Mismatch between parts ({len(part_names)}) and values ({len(curr_values)})")
+        if len(part_headers) != len(curr_values):
+            print(f"Warning: Mismatch between parts ({len(part_headers)}) and values ({len(curr_values)})")
             # Use the shorter length for comparison
-            compare_length = min(len(part_names), len(curr_values))
+            compare_length = min(len(part_headers), len(curr_values))
             # Trim the arrays to the same length
-            part_names = part_names[:compare_length]
+            part_headers = part_headers[:compare_length]
             curr_values = curr_values[:compare_length]
             prev_values = prev_values[:compare_length] if len(prev_values) > compare_length else prev_values
         
@@ -196,7 +226,7 @@ def detect_changes(previous_data, current_data):
         print("\nComparing states...")
         
         # Compare each value and detect changes
-        for i in range(len(part_names)):
+        for i in range(len(part_headers)):
             if i >= len(prev_values) or i >= len(curr_values):
                 print(f"Warning: Index {i} out of bounds. Skipping comparison.")
                 continue
@@ -206,8 +236,8 @@ def detect_changes(previous_data, current_data):
             curr_val = str(curr_values[i]).strip()
             
             if prev_val != curr_val:
-                changes.append((part_names[i], prev_values[i], curr_values[i]))
-                print(f"Change detected in {part_names[i]}")
+                changes.append((part_headers[i], prev_values[i], curr_values[i]))
+                print(f"Change detected in {part_headers[i]}")
         
         # Also check if total weight changed
         if len(previous_data[0]) > 1 and len(current_data[0]) > 1:
